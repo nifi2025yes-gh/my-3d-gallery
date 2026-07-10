@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Self Curating Gallery - Final Stable Edition</title>
+    <style>
+        /* Flexbox를 폐기하고 절대 좌표(Absolute) 기반으로 레이아웃 강제 고정 */
+        body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: #f5f6f8; font-family: 'Malgun Gothic', sans-serif; }
+        
+        #left-panel { position: absolute; left: 0; top: 0; width: 260px; height: 100%; background: #ffffff; border-right: 1px solid #ddd; z-index: 10; padding: 20px; box-sizing: border-box; overflow-y: auto; }
+        #right-panel { position: absolute; right: 0; top: 0; width: 280px; height: 100%; background: #ffffff; border-left: 1px solid #ddd; z-index: 10; padding: 20px; box-sizing: border-box; overflow-y: auto; }
+        #center-viewport { position: absolute; left: 260px; right: 280px; top: 0; bottom: 0; background: #eeeeee; overflow: hidden; }
+        
+        /* 캔버스 렌더링 붕괴 방지 */
+        canvas { display: block; width: 100% !important; height: 100% !important; outline: none; }
+
+        h3 { font-size: 16px; color: #333; margin-top: 0; border-bottom: 2px solid #2c3e50; padding-bottom: 10px; margin-bottom: 15px; }
+        .section-title { font-size: 13px; font-weight: bold; color: #666; margin: 20px 0 10px 0; }
+
+        /* 자원 패널 UI */
+        .asset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .asset-item { 
+            aspect-ratio: 1; background: #eee; border: 2px solid transparent; border-radius: 6px; 
+            cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; font-size: 12px; color: white; font-weight: bold;
+        }
+        .asset-item.active { border-color: #2c3e50; transform: scale(0.95); box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
+
+        /* 폼 및 버튼 UI */
+        label { display: block; font-size: 12px; color: #555; margin-bottom: 5px; }
+        input[type="text"], textarea, select { 
+            width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;
+        }
+        textarea { resize: vertical; height: 80px; }
+        
+        button { 
+            width: 100%; padding: 10px; margin-bottom: 8px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s;
+        }
+        .btn-view { background: #34495e; }
+        .btn-view:hover { background: #4169E1; }
+        .btn-tool { background: #d35400; }
+        .btn-tool:hover { background: #e67e22; }
+        .btn-save { background: #2c3e50; }
+        .btn-save:hover { background: #1a252f; }
+
+        /* 뷰포트 오버레이 UI */
+        #viewport-ui { position: absolute; top: 15px; left: 15px; background: rgba(0,0,0,0.7); color: white; padding: 10px 15px; border-radius: 8px; font-size: 13px; pointer-events: none; z-index: 5; }
+        
+        .art-caption {
+            position: absolute; background: rgba(255, 255, 255, 0.95); padding: 10px 15px; border-radius: 4px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); pointer-events: none; opacity: 0; transition: opacity 0.2s;
+            border-left: 4px solid #2c3e50; transform: translate(-50%, -100%); margin-top: -15px; min-width: 150px; z-index: 5;
+        }
+        .art-caption h4 { margin: 0 0 5px 0; font-size: 14px; color: #2c3e50; }
+        .art-caption p { margin: 0; font-size: 11px; color: #666; line-height: 1.4; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+</head>
+<body>
+
+    <div id="left-panel">
+        <div class="section-title" style="margin-top:0;">카메라 시점 (고정 뷰)</div>
+        <button class="btn-view" onclick="setView('front')">정면 눈높이 뷰</button>
+        <button class="btn-view" onclick="setView('top')">천정 뷰</button>
+        <button class="btn-view" onclick="setView('left')">좌측면 뷰</button>
+        <button class="btn-view" onclick="setView('right')">우측면 뷰</button>
+        
+        <p style="font-size:10px; color:#888; text-align:center;">* 마우스 휠: 줌 인/아웃</p>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+
+        <h3>Asset Library</h3>
+        <p style="font-size: 11px; color: #888;">작품을 클릭하고 정면 벽을 눌러 배치하십시오.</p>
+        <div class="asset-grid">
+            <div class="asset-item" style="background:#e74c3c;" onclick="selectAsset('red', this)">Art 1</div>
+            <div class="asset-item" style="background:#3498db;" onclick="selectAsset('blue', this)">Art 2</div>
+            <div class="asset-item" style="background:#f1c40f;" onclick="selectAsset('yellow', this)">Art 3</div>
+            <div class="asset-item" style="background:#2ecc71;" onclick="selectAsset('green', this)">Art 4</div>
+        </div>
+    </div>
+
+    <div id="center-viewport">
+        <div id="viewport-ui">벽면 클릭: 작품 걸기 | 작품 클릭: 선택 및 크기 조절 | 마우스 휠: 확대/축소</div>
+        <div id="caption-container" class="art-caption">
+            <h4 id="cap-title">작품명</h4>
+            <p id="cap-desc">도슨트 텍스트</p>
+        </div>
+    </div>
+
+    <div id="right-panel">
+        <h3>Property Panel</h3>
+        
+        <div id="obj-properties" style="display: none; background: #fdfdfd; padding: 10px; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 20px;">
+            <div class="section-title" style="margin-top:0; color:#d35400;">물리 제어 (이동 및 크기)</div>
+            <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                <button class="btn-tool" onclick="setTransformMode('translate')">방향 이동</button>
+                <button class="btn-tool" onclick="setTransformMode('scale')">크기 조절</button>
+            </div>
+            <p style="font-size: 11px; color: #888; margin-bottom: 15px; line-height:1.4;">
+                * 3D 제어기 화살표를 마우스로 드래그하십시오.<br>
+                * <strong>크기 조절 시 중앙의 회색 상자를 잡아야 비율이 깨지지 않습니다.</strong>
+            </p>
+
+            <div class="section-title">작품 서사 입력</div>
+            <label>작품명</label>
+            <input type="text" id="prop-title">
+            <label>도슨트 텍스트 (서사)</label>
+            <textarea id="prop-desc"></textarea>
+            <button class="btn-save" onclick="applyArtProperties()">캡션 데이터 저장</button>
+        </div>
+
+        <div class="section-title">공간 전역 설정</div>
+        <label>벽면 테마 변경</label>
+        <select id="env-wall" onchange="changeEnvironment()">
+            <option value="white">화이트 갤러리 (기본)</option>
+            <option value="warm">웜 그레이 (차분함)</option>
+            <option value="dark">다크 갤러리 (몰입감)</option>
+        </select>
+    </div>
+
+    <script>
+        // 코드 실행을 브라우저 렌더링 완료 이후로 강제하여 크기 '0' 버그 완벽 차단
+        window.onload = function() {
+            const container = document.getElementById('center-viewport');
+            
+            // 컨테이너 크기 명시적 계산 (화면 너비 - 양측 패널 너비)
+            let width = container.clientWidth;
+            let height = container.clientHeight;
+
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xeef0f3);
+
+            const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(width, height);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // 조명 세팅
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            dirLight.position.set(4, 10, 5);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // 전시관 벽면과 바닥 세팅
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0xfdfdfd, roughness: 0.8 });
+            
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({ color: 0xdcdde1, roughness: 0.5 }));
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            const mainWall = new THREE.Mesh(new THREE.BoxGeometry(20, 6, 0.5), wallMat);
+            mainWall.position.set(0, 3, -5);
+            mainWall.receiveShadow = true;
+            scene.add(mainWall);
+
+            // 고정 시점 이동 시스템
+            window.setView = function(viewType) {
+                if (viewType === 'front') {
+                    camera.position.set(0, 1.8, 6.5);
+                    camera.lookAt(0, 1.8, -5);
+                } else if (viewType === 'top') {
+                    camera.position.set(0, 10, -4.5);
+                    camera.lookAt(0, 0, -5);
+                } else if (viewType === 'left') {
+                    camera.position.set(-6, 1.8, 1);
+                    camera.lookAt(0, 1.8, -5);
+                } else if (viewType === 'right') {
+                    camera.position.set(6, 1.8, 1);
+                    camera.lookAt(0, 1.8, -5);
+                }
+            };
+            setView('front');
+
+            // 마우스 휠 줌인/줌아웃
+            container.addEventListener('wheel', (e) => {
+                camera.fov += e.deltaY * 0.05;
+                camera.fov = Math.max(20, Math.min(90, camera.fov));
+                camera.updateProjectionMatrix();
+            });
+
+            // 작품 이동/크기 물리 제어기
+            const transformControl = new THREE.TransformControls(camera, renderer.domElement);
+            scene.add(transformControl);
+
+            // 제어기 간섭 방지 센서
+            let isDragging = false;
+            let isGizmoHovered = false;
+            transformControl.addEventListener('dragging-changed', (e) => isDragging = e.value);
+            transformControl.addEventListener('hoveron', () => isGizmoHovered = true);
+            transformControl.addEventListener('hoveroff', () => isGizmoHovered = false);
+
+            window.setTransformMode = function(mode) {
+                transformControl.setMode(mode);
+            };
+
+            // 에셋 선택 및 전역 변수
+            let selectedAssetColor = null;
+            let artworks = []; 
+            let activeArtwork = null;
+
+            window.selectAsset = function(color, element) {
+                document.querySelectorAll('.asset-item').forEach(el => el.classList.remove('active'));
+                element.classList.add('active');
+                const colorMap = { 'red': 0xe74c3c, 'blue': 0x3498db, 'yellow': 0xf1c40f, 'green': 0x2ecc71 };
+                selectedAssetColor = colorMap[color];
+            };
+
+            // 마우스 클릭 및 광선 추적(Raycasting)
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+
+            container.addEventListener('mousedown', (event) => {
+                // 조절기를 드래그하거나 올려두고 있을 때는 작품 배치 로직 무시
+                if (isDragging || isGizmoHovered) return;
+
+                const rect = container.getBoundingClientRect();
+                mouse.x = ((event.clientX - rect.left) / width) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / height) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                
+                // 1순위: 작품 클릭 확인
+                const artIntersects = raycaster.intersectObjects(artworks);
+                if (artIntersects.length > 0) {
+                    activeArtwork = artIntersects[0].object;
+                    transformControl.attach(activeArtwork.parent);
+                    
+                    document.getElementById('obj-properties').style.display = 'block';
+                    document.getElementById('prop-title').value = activeArtwork.userData.title;
+                    document.getElementById('prop-desc').value = activeArtwork.userData.desc;
+                    return; 
+                }
+
+                // 2순위: 벽면 클릭 확인 및 작품 배치
+                const wallIntersects = raycaster.intersectObject(mainWall);
+                if (wallIntersects.length > 0 && selectedAssetColor !== null) {
+                    const pt = wallIntersects[0].point;
+                    createArtwork(pt.x, pt.y, mainWall.position.z + 0.26, selectedAssetColor);
+                    
+                    selectedAssetColor = null;
+                    document.querySelectorAll('.asset-item').forEach(el => el.classList.remove('active'));
+                } else {
+                    // 허공 클릭 시 제어기 해제
+                    transformControl.detach();
+                    document.getElementById('obj-properties').style.display = 'none';
+                    activeArtwork = null;
+                }
+            });
+
+            // 작품 렌더링 함수
+            function createArtwork(x, y, z, color) {
+                const artGroup = new THREE.Group();
+                artGroup.position.set(x, y, z);
+
+                const canvas = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.2), new THREE.MeshStandardMaterial({ color: color }));
+                canvas.userData = { title: "새로운 기록", desc: "이곳에 담긴 기억을 기록하십시오." };
+                
+                const frame = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.3, 0.08), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+                frame.position.z = -0.04;
+                frame.castShadow = true;
+                
+                artGroup.add(frame);
+                artGroup.add(canvas);
+                
+                scene.add(artGroup);
+                artworks.push(canvas);
+            }
+
+            // 속성 및 환경 저장
+            window.applyArtProperties = function() {
+                if (activeArtwork) {
+                    activeArtwork.userData.title = document.getElementById('prop-title').value;
+                    activeArtwork.userData.desc = document.getElementById('prop-desc').value;
+                }
+            };
+
+            window.changeEnvironment = function() {
+                const val = document.getElementById('env-wall').value;
+                if (val === 'white') wallMat.color.setHex(0xfdfdfd);
+                if (val === 'warm') wallMat.color.setHex(0xd5ceca);
+                if (val === 'dark') wallMat.color.setHex(0x22252a);
+            };
+
+            // 마우스 오버 캡션(명찰) 인터랙션
+            const captionUI = document.getElementById('caption-container');
+            container.addEventListener('mousemove', (event) => {
+                if (isDragging || isGizmoHovered) {
+                    captionUI.style.opacity = '0';
+                    return;
+                }
+
+                const rect = container.getBoundingClientRect();
+                mouse.x = ((event.clientX - rect.left) / width) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / height) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(artworks);
+
+                if (intersects.length > 0) {
+                    const art = intersects[0].object;
+                    const wp = new THREE.Vector3();
+                    art.getWorldPosition(wp);
+                    
+                    wp.y += (0.65 * art.parent.scale.y); 
+                    wp.project(camera);
+
+                    const screenX = (wp.x * 0.5 + 0.5) * width;
+                    const screenY = (-(wp.y * 0.5) + 0.5) * height;
+
+                    captionUI.style.left = `${screenX}px`;
+                    captionUI.style.top = `${screenY}px`;
+                    captionUI.style.opacity = '1';
+
+                    document.getElementById('cap-title').innerText = art.userData.title;
+                    document.getElementById('cap-desc').innerText = art.userData.desc;
+                } else {
+                    captionUI.style.opacity = '0';
+                }
+            });
+
+            // 창 크기 조절 시 해상도 즉각 대응
+            window.addEventListener('resize', () => {
+                width = container.clientWidth;
+                height = container.clientHeight;
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height);
+            });
+
+            // 렌더링 루프
+            function animate() {
+                requestAnimationFrame(animate);
+                renderer.render(scene, camera);
+            }
+            animate();
+        };
+    </script>
+</body>
+</html>
