@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>내가 만든 전시관 — Self Curating Gallery (V37 Final Polish)</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=Noto+Serif+KR:wght@200;300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --bg-master: linear-gradient(135deg, #FFB74D 0%, #FF8F00 100%);
+    --hex-pale: #FFF3E0;
+    --hex-pale-hover: #FFFFFF;
+    --text-dark: #3E2723;
+    --accent: #E65100;
+    --gold-icon: #C9A050;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #FF9800; font-family: 'Inter', sans-serif; }
+
+  .view-container { position: fixed; inset: 0; display: flex; flex-direction: column; opacity: 1; transition: opacity 0.4s ease, visibility 0.4s; z-index: 50; background: var(--bg-master); }
+  
+  /* 화면 전환 겹침 현상을 완벽히 차단하는 강제 비활성화 속성 */
+  .view-container.hidden-view { 
+    opacity: 0 !important; 
+    visibility: hidden !important; 
+    pointer-events: none !important; 
+    z-index: -10 !important; 
+    display: none !important; 
+  }
+
+  .art-bg-overlay { position: absolute; inset: 0; pointer-events: none; opacity: 0.15; mix-blend-mode: overlay; z-index: 1; }
+
+  /* 1. 첫 화면 */
+  #portal-landing { z-index: 60; align-items: center; justify-content: center; padding: 2rem; }
+  
+  .landing-content-wrapper { display: flex; flex-direction: column; width: 100%; max-width: 1200px; gap: 2.5rem; z-index: 20; }
+
+  .title-zone { text-align: left; padding-left: 0.5rem; pointer-events: none; }
+  .brand-slogan { font-family: 'Noto Serif KR', serif; font-size: 1.5rem; font-weight: 600; color: #111; margin-bottom: 0.2rem; letter-spacing: -0.02em; }
+  .brand-ko { font-family: 'Noto Serif KR', serif; font-size: 2.8rem; font-weight: 300; letter-spacing: -0.02em; line-height: 1.1; color: #FFF; text-shadow: 0 2px 10px rgba(230,81,0,0.3); }
+  .brand-en { font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; font-weight: 400; letter-spacing: 0.4em; text-transform: uppercase; color: #FFE0B2; margin-top: 0.5rem; }
+  .brand-deco-line { width: 100px; height: 1px; background: rgba(255,255,255,0.7); margin-top: 1.5rem; }
+
+  .sketch-gallery-wrap { display: flex; gap: 2rem; width: 100%; justify-content: space-between; }
+  .sketch-frame { flex: 1; position: relative; aspect-ratio: 4/3; padding: 12px; background: rgba(255,255,255,0.1); }
+  .sketch-frame::before, .sketch-frame::after { content: ''; position: absolute; inset: 0; border: 1px solid rgba(0,0,0,0.7); pointer-events: none; }
+  .sketch-frame::before { transform: rotate(0.5deg); }
+  .sketch-frame::after { transform: rotate(-0.5deg); inset: 2px; border: 1px solid rgba(0,0,0,0.4); }
+  .sketch-frame img { width: 100%; height: 100%; object-fit: cover; display: block; box-shadow: 0 10px 20px rgba(150,50,0,0.2); background: #e0e0e0; }
+
+  /* 하단 아이콘 벌집 포털 & 텍스트 라벨 추가 */
+  .icon-portal-zone { display: flex; gap: 4rem; justify-content: center; margin-top: 1rem; }
+  
+  .portal-item { display: flex; flex-direction: column; align-items: center; gap: 0.8rem; cursor: pointer; }
+  .portal-item:hover .mini-hex-wrapper { transform: translateY(-8px); filter: drop-shadow(0 12px 20px rgba(200,80,0,0.4)); }
+  
+  .mini-hex-wrapper { filter: drop-shadow(0 8px 15px rgba(200,80,0,0.3)); transition: transform 0.3s, filter 0.3s; }
+  
+  .mini-hex-outer { width: 100px; height: 115px; background: #FFF; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); position: relative; display: flex; align-items: center; justify-content: center; }
+  .mini-hex-inner { position: absolute; inset: 4px; background: #FFF; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); display: flex; align-items: center; justify-content: center; border: 1px solid transparent; }
+  .mini-hex-outer::before { content: ''; position: absolute; inset: 3px; background: var(--gold-icon); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
+  .hex-icon { width: 44px; height: 44px; stroke: var(--gold-icon); stroke-width: 1.5; fill: none; }
+  
+  .portal-text-ko { font-family: 'Noto Serif KR', serif; font-size: 1.15rem; font-weight: 600; color: #FFFFFF; text-shadow: 0 2px 6px rgba(0,0,0,0.4); letter-spacing: 0.05em; }
+  .portal-text-en { font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 500; color: #FFE0B2; letter-spacing: 0.15em; text-transform: uppercase; margin-top: 0.2rem; }
+
+  /* 2. 유기적 벌집 전시실 */
+  #room-landing { z-index: 55; padding: 3rem; overflow-y: auto; }
+  .room-inner-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.4); padding-bottom: 1.5rem; margin-bottom: 2rem; }
+  .btn-header-back { background: rgba(255,255,255,0.2); border: 1px solid #FFF; color: #FFF; padding: 0.6rem 1.2rem; border-radius: 6px; font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: all 0.3s; }
+  .btn-header-back:hover { background: #FFF; color: var(--accent); }
+  
+  .gallery-organic-canvas { position: relative; width: 100%; max-width: 1100px; height: 620px; margin: auto; flex-grow: 1; }
+  
+  .organic-hex-node { position: absolute; width: 175px; height: 200px; background: rgba(255,255,255,0.5); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); cursor: pointer; transition: all 0.4s; }
+  .organic-hex-node::before { content: ''; position: absolute; inset: 2px; background: var(--hex-pale); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); z-index: 1; transition: background 0.3s; pointer-events: none; }
+  .organic-hex-content { position: absolute; inset: 4px; z-index: 2; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); display: flex; flex-direction: column; align-items: center; justify-content: center; background-size: cover; background-position: center; transition: all 0.3s; pointer-events: none; }
+  .organic-hex-node:hover { transform: scale(1.1) translateY(-5px); z-index: 40 !important; filter: drop-shadow(0 15px 20px rgba(230,81,0,0.25)); }
+  .organic-hex-node:hover::before { background: var(--hex-pale-hover); }
+
+  .node-pos-1 { top: 40px;  left: 60px;  z-index: 10; }
+  .node-pos-2 { top: 220px; left: 10px;  z-index: 11; }
+  .node-pos-3 { top: 410px; left: 90px;  z-index: 12; }
+  .node-pos-4 { top: 470px; left: 270px; z-index: 13; }
+  .node-pos-video { top: 180px; left: 440px; z-index: 30; width: 220px; height: 251px; background: #FFFFFF; animation: brightGlow 3s infinite alternate; }
+  .node-pos-video::before { inset: 3px; background: #FFE0B2 !important; }
+  .node-pos-5 { top: 30px;  left: 660px; z-index: 14; }
+  .node-pos-6 { top: 120px; left: 860px; z-index: 15; }
+  .node-pos-7 { top: 320px; left: 900px; z-index: 16; }
+  .node-pos-8 { top: 460px; left: 740px; z-index: 17; }
+
+  @keyframes brightGlow {
+    0% { filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.4)); }
+    100% { filter: drop-shadow(0 0 25px rgba(255, 255, 255, 0.8)); }
+  }
+
+  /* 3. 포커스 모드 */
+  #focus-view { z-index: 100; background: rgba(230, 81, 0, 0.95); backdrop-filter: blur(10px); }
+  .focus-layout { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; gap: 4rem; padding: 3rem 5rem; }
+  
+  .focus-frame-wrapper {
+    flex: 1; max-width: 850px; aspect-ratio: 16/10; background: #1e1e1e; position: relative; 
+    border: 16px solid #FFFFFF; box-shadow: 0 30px 60px rgba(100, 30, 0, 0.4);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .focus-image-display { width: 100%; height: 100%; background-size: contain; background-repeat: no-repeat; background-position: center; display: none; }
+  .focus-video-display { width: 100%; height: 100%; object-fit: contain; display: none; outline: none; background: #000; }
+  .empty-frame-text { position: absolute; color: rgba(0,0,0,0.3); font-family: 'Noto Serif KR', serif; font-size: 1.1rem; text-align: center; pointer-events: none; }
+
+  .focus-panel { width: 420px; max-height: 85vh; background: rgba(255, 255, 255, 0.95); border-radius: 12px; padding: 2.5rem; display: flex; flex-direction: column; overflow-y: auto; box-shadow: 0 20px 40px rgba(150, 50, 0, 0.25); color: var(--text-dark); }
+  .panel-eyebrow { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.5rem; }
+  .panel-title { font-family: 'Noto Serif KR', serif; font-size: 1.8rem; font-weight: 600; line-height: 1.3; margin-bottom: 0.4rem; color: var(--text-dark); }
+  .panel-asset-id { font-size: 0.65rem; color: rgba(0,0,0,0.4); letter-spacing: 0.1em; margin-bottom: 1.5rem; }
+  .panel-divider { height: 1px; background: rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+  
+  .form-group { margin-bottom: 1.2rem; }
+  .form-label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-dark); margin-bottom: 0.5rem; }
+  .form-input, .form-textarea { width: 100%; background: #FAFAFA; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; color: var(--text-dark); font-size: 0.9rem; padding: 0.8rem; outline: none; transition: all 0.3s; }
+  .form-input:focus, .form-textarea:focus { border-color: var(--accent); background: #FFF; box-shadow: 0 0 0 2px rgba(230,81,0,0.1); }
+  .form-textarea { min-height: 140px; resize: none; }
+  
+  .action-buttons { display: flex; gap: 0.5rem; width: 100%; }
+  .file-upload-btn { flex: 2; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.8rem; background: rgba(230,81,0,0.05); border: 1px dashed var(--accent); border-radius: 6px; color: var(--accent); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.3s; margin: 0; }
+  .file-upload-btn:hover { background: rgba(230,81,0,0.1); }
+  .btn-clear-asset { flex: 1; padding: 0.8rem; background: rgba(255,60,60,0.05); border: 1px dashed rgba(255,60,60,0.4); border-radius: 6px; color: #e53935; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+  .btn-clear-asset:hover { background: rgba(255,60,60,0.1); border-color: #e53935; }
+  
+  .save-indicator { font-size: 0.75rem; font-weight: 600; color: #2E7D32; display: flex; align-items: center; gap: 0.4rem; margin-top: 0.5rem; opacity: 0; transition: opacity 0.3s; }
+  .save-indicator.show { opacity: 1; }
+  
+  .btn-close-focus { position: absolute; top: 2rem; right: 3rem; background: rgba(255,255,255,0.2); border: 2px solid #FFF; color: #FFF; padding: 0.6rem 1.4rem; border-radius: 30px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.1em; cursor: pointer; transition: all 0.3s; }
+  .btn-close-focus:hover { background: #FFF; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div style="display:none;">
+  <audio id="bgm-masterpiece" src="art.mp3" loop></audio>
+  <audio id="bgm-travel" src="travel.mp3" loop></audio>
+  <audio id="bgm-memorial" src="memorial.mp3" loop></audio>
+</div>
+
+<div class="art-bg-overlay"></div>
+
+<!-- 랜딩 포털 화면 -->
+<div id="portal-landing" class="view-container">
+  <div class="landing-content-wrapper">
+    <div class="title-zone">
+      <p class="brand-slogan">기억에 생명을</p>
+      <h1 class="brand-ko">내가 만든 전시관</h1>
+      <p class="brand-en">Self Curating Gallery</p>
+      <div class="brand-deco-line"></div>
+    </div>
+
+    <div class="sketch-gallery-wrap">
+      <div class="sketch-frame"><img src="a10파리스의 심판(1636).jpg" alt="명화관 샘플" onerror="this.onerror=null; this.src='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';"></div>
+      <div class="sketch-frame"><img src="t7.jpg" alt="여행관 샘플" onerror="this.onerror=null; this.src='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';"></div>
+      <div class="sketch-frame"><img src="m4.png" alt="추모관/가족 샘플" onerror="this.onerror=null; this.src='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';"></div>
+    </div>
+
+    <!-- 라벨이 추가된 아이콘 포털 -->
+    <div class="icon-portal-zone">
+      <!-- 1. 명화관 -->
+      <div class="portal-item" onclick="openRoom('masterpiece', '명화관', 'Hall I · ART')">
+        <div class="mini-hex-wrapper">
+          <div class="mini-hex-outer">
+            <div class="mini-hex-inner">
+              <svg class="hex-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c1.38 0 2.5-1.12 2.5-2.5 0-.61-.23-1.17-.6-1.61-.31-.37-.5-.84-.5-1.35 0-1.04.84-1.89 1.89-1.89h1.71c2.76 0 5-2.24 5-5 0-4.42-4.48-8-10-8z"/><circle cx="6.5" cy="11.5" r="1.5"/><circle cx="9" cy="7" r="1.5"/><circle cx="15" cy="7" r="1.5"/><circle cx="17.5" cy="11.5" r="1.5"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="text-center">
+          <div class="portal-text-ko">명화관</div>
+          <div class="portal-text-en">Art</div>
+        </div>
+      </div>
+      
+      <!-- 2. 여행관 -->
+      <div class="portal-item" onclick="openRoom('travel', '여행관', 'Hall II · TRAVEL')">
+        <div class="mini-hex-wrapper">
+          <div class="mini-hex-outer">
+            <div class="mini-hex-inner">
+              <svg class="hex-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="text-center">
+          <div class="portal-text-ko">여행관</div>
+          <div class="portal-text-en">Travel</div>
+        </div>
+      </div>
+      
+      <!-- 3. 추모관 -->
+      <div class="portal-item" onclick="openRoom('memorial', '추모관', 'Hall III · MEMORIAL')">
+        <div class="mini-hex-wrapper">
+          <div class="mini-hex-outer">
+            <div class="mini-hex-inner">
+              <svg class="hex-icon" viewBox="0 0 24 24"><path d="M12 12v7m0 0c-2 0-4-1-4-3m4 3c2 0 4-1 4-3m-4-7c-1-2-3-3-4-2-1 1-1 3 1 4l3 1"/><path d="M12 12c1-2 3-3 4-2 1 1 1 3-1 4l-3 1"/><path d="M7 21h10"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="text-center">
+          <div class="portal-text-ko">추모관</div>
+          <div class="portal-text-en">Memorial</div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+</div>
+
+<!-- 전시실 내부 화면 -->
+<div id="room-landing" class="view-container hidden-view">
+  <div class="room-inner-header">
+    <div>
+      <span class="text-[11px] tracking-widest text-white font-bold uppercase drop-shadow-md">LIVE EXHIBITION SPACE</span>
+      <h1 class="text-3xl font-bold tracking-wider text-white mt-1 drop-shadow-lg" id="room-header-title">전시 공간</h1>
+    </div>
+    <button class="btn-header-back" onclick="backToPortal()">← 메인 포털 복귀</button>
+  </div>
+
+  <div class="gallery-organic-canvas">
+    <div class="organic-hex-node node-pos-1" onclick="openFocusMode('frame-01')"><div class="organic-hex-content" id="hex-img-frame-01"><span class="text-[13px] font-bold tracking-widest" id="hex-tag-frame-01">FRAME 01</span><p class="text-[14px] font-medium mt-1 text-center px-2 truncate w-full" id="hex-loc-frame-01">비어 있음</p></div></div>
+    <div class="organic-hex-node node-pos-2" onclick="openFocusMode('frame-02')"><div class="organic-hex-content" id="hex-img-frame-02"><span class="text-[13px] font-bold tracking-widest" id="hex-tag-frame-02">FRAME 02</span><p class="text-[14px] font-medium mt-1 text-center px-2 truncate w-full" id="hex-loc-frame-02">비어 있음</p></div></div>
+    <div class="organic-hex-node node-pos-3" onclick="openFocusMode('frame-03')"><div class="organic-hex-content" id="hex-img-frame-03"><span class="text-[13px] font-bold tracking-widest" id="hex-tag-frame-03">FRAME 03</span><p class="text-[14px] font-medium mt-1 text-center px-2 truncate w-full" id="hex-loc-frame-03">비어 있음</p></div></div>
+    <div class="organic-hex-node node-pos-4" onclick="openFocusMode('frame-04')"><div class="organic-hex-content" id="hex-img-frame-04"><span class="text-[13px] font-bold tracking-widest" id="hex-tag-frame-04">FRAME 04</span><p class="text-[14px] font-medium mt-1 text-center px-2 truncate w-full" id="hex-loc-frame-04">비어 있음</p></div></div>
+    
+    <div class="organic-hex-node node-pos-video" onclick="openFocusMode('video-01')">
+      <div class="organic-hex-content" id="hex-img-video-01">
+        <span class="text-[15px] font-black tracking-widest" id="hex-tag-video-01">▶ VIDEO</span>
+        <p class="text-[14px] font-semibold mt-2 text-center px-2 truncate w-full" id="hex-loc-video-01">미디어 캔버스</p>
+      </div>
+    </div>
+    
+    <div class="organic-hex-node node-pos-5" onclick="openFocusMode('frame-05')"><div class="organic-hex-content" id="hex-img-frame-05"><span class="text-[13px] font-bold tracking-widest" id="hex-tag-frame-05">FRAME 05</span><p class="text-[14px] font-medium mt-1 text-center px-2 truncate w-full" id="hex-loc-frame-05">비어 있음</p></div></div>
+    <div class="organic-hex-node node-pos-6" onclick="openFocusMode('frame-06')"><div class="organic-hex-content" id="hex-img-frame-06"><span class="text-[13px] font-bold tracking-widest" id="hex-tag-frame-06">FRAME 06</span><p class="text-[14px] font-medium mt-1 text-center px-2 truncate w-full" id="hex-loc-frame-06">비어 있음</p></div></div>
+    <div class="organic-hex-node node-pos-7" onclick="openFocusMode('frame-07')"><div class="organic-hex-content" id="hex-img-frame-07"><span class="text-[13px] font-bold tracking-widest" id="hex-tag-frame-07">FRAME 07</span><p class="text-[14px] font-medium mt-1 text-center px-2 truncate w-full" id="hex-loc-frame-07">비어 있음</p></div></div>
+    <div class="organic-hex-node node-pos-8" onclick="openFocusMode('frame-08')"><div class="organic-hex-content" id="hex-img-frame-08"><span class="text-[13px] font-bold tracking-widest" id="hex-tag-frame-08">FRAME 08</span><p class="text-[14px] font-medium mt-1 text-center px-2 truncate w-full" id="hex-loc-frame-08">비어 있음</p></div></div>
+  </div>
+</div>
+
+<div id="focus-view" class="view-container hidden-view">
+  <button class="btn-close-focus" onclick="closeFocusMode()">✕ 갤러리로 복귀</button>
+  
+  <div class="focus-layout">
+    <div class="focus-frame-wrapper">
+      <div id="focus-main-image" class="focus-image-display"></div>
+      <video id="focus-main-video" class="focus-video-display" controls preload="metadata"></video>
+      <div id="focus-empty-text" class="empty-frame-text">
+        <span style="font-weight:400; font-size:1.4rem; color: rgba(0,0,0,0.5);">빈 캔버스 (Empty Frame)</span><br>
+        <span style="font-size:0.8rem; opacity:0.8; color: rgba(0,0,0,0.4);">우측 큐레이터 패널에서 자산을 매핑하여 공간을 채우십시오.</span>
+      </div>
+    </div>
+    
+    <div class="focus-panel">
+      <p class="panel-eyebrow" id="panel-eyebrow-tag">Live Curation Mode</p>
+      <h2 class="focus-h2 text-2xl font-bold mb-1" id="panel-title">전시 프레임</h2>
+      <p class="panel-asset-id" id="panel-asset-id">ARCHIVE ID</p>
+      <div class="panel-divider"></div>
+      
+      <div class="form-group">
+        <label class="form-label" id="file-label-text">시연용 미디어 업로드</label>
+        <div class="action-buttons">
+          <label for="file-input" class="file-upload-btn" id="btn-upload-label">💾 자산 매핑하기</label>
+          <button type="button" class="btn-clear-asset" onclick="clearCurrentAsset()">🗑️ 비우기</button>
+        </div>
+        <input type="file" id="file-input" style="display:none;">
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="input-location">작품 명칭 / 지명 (Title / Loc)</label>
+        <input class="form-input" id="input-location" type="text" placeholder="예: 첫 번째 전시 작품" />
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="input-date">연도 및 아카이브 시점 (Date)</label>
+        <input class="form-input" id="input-date" type="text" placeholder="예: 2026.06" />
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="input-reflection">도슨트 해설 및 기록 (Narrative)</label>
+        <textarea class="form-textarea" id="input-reflection" placeholder="이 프레임에 대한 설명이나 감상을 작성해 보십시오."></textarea>
+        <div class="save-indicator" id="save-indicator"><span class="save-dot"></span> 라이브 데이터가 안전하게 갱신되었습니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentRoomId = '';
+let currentAssets = [];
+let activeFrameId = null;
+let sessionMedia = {}; 
+
+const DEFAULT_ASSET_STRUCTURE = [
+  { id: 'frame-01', type: 'photo' }, { id: 'frame-02', type: 'photo' }, { id: 'frame-03', type: 'photo' },
+  { id: 'frame-04', type: 'photo' }, { id: 'video-01', type: 'video' }, { id: 'frame-05', type: 'photo' },
+  { id: 'frame-06', type: 'photo' }, { id: 'frame-07', type: 'photo' }, { id: 'frame-08', type: 'photo' }
+];
+
+function playRoomMusic(roomId) {
+  const audios = ['bgm-masterpiece', 'bgm-travel', 'bgm-memorial'];
+  audios.forEach(id => {
+    let audioObj = document.getElementById(id);
+    if(audioObj) {
+      audioObj.pause();
+      audioObj.currentTime = 0;
+    }
+  });
+
+  if (roomId !== 'none') {
+    let targetAudio = document.getElementById('bgm-' + roomId);
+    if(targetAudio) {
+      let playPromise = targetAudio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.warn("브라우저 자동 재생 정책으로 인해 사용자의 클릭 상호작용 후 재생됩니다.", error);
+        });
+      }
+    }
+  }
+}
+
+function loadAssets(roomId) {
+  const key = `scg_v37_final_${roomId}`;
+  try {
+    const data = localStorage.getItem(key);
+    if(data) return JSON.parse(data);
+  } catch(e) {}
+  
+  return DEFAULT_ASSET_STRUCTURE.map(a => ({
+    id: a.id, type: a.type,
+    title: a.type === 'video' ? '미디어 캔버스' : `프레임 0${a.id.split('-')[1]}`,
+    location: '', date: '', reflection: '', compressedImg: null
+  }));
+}
+
+function saveAssets() {
+  if(!currentRoomId) return;
+  try {
+    localStorage.setItem(`scg_v37_final_${currentRoomId}`, JSON.stringify(currentAssets));
+  } catch(e) {
+    alert("시연 기기의 저장 공간 제한을 초과했습니다.");
+  }
+}
+
+function openRoom(roomId, titleKo, titleEn) {
+  try {
+    currentRoomId = roomId;
+    currentAssets = loadAssets(roomId);
+    
+    document.getElementById('room-header-title').textContent = `${titleKo} — ${titleEn}`;
+    updateHoneycombUI();
+    
+    // 강제 화면 전환 로직
+    document.getElementById('portal-landing').classList.add('hidden-view');
+    document.getElementById('room-landing').classList.remove('hidden-view');
+
+    playRoomMusic(roomId);
+  } catch (error) {
+    console.error("화면 이동 중 오류 발생:", error);
+    alert("화면 전환 중 일시적인 오류가 발생했습니다. 새로고침 후 다시 시도해 주십시오.");
+  }
+}
+
+function backToPortal() {
+  document.getElementById('room-landing').classList.add('hidden-view');
+  document.getElementById('portal-landing').classList.remove('hidden-view');
+  playRoomMusic('none');
+}
+
+function updateHoneycombUI() {
+  if (!Array.isArray(currentAssets)) currentAssets = DEFAULT_ASSET_STRUCTURE;
+  
+  currentAssets.forEach(asset => {
+    const locEl = document.getElementById(`hex-loc-${asset.id}`);
+    const tagEl = document.getElementById(`hex-tag-${asset.id}`);
+    const imgEl = document.getElementById(`hex-img-${asset.id}`);
+    
+    // [수정된 부분] 이미지가 있을 때만 텍스트를 비우고, 없을 때만 표시합니다
+    const mediaKey = `${currentRoomId}_${asset.id}`;
+    const hasImage = asset.compressedImg;
+    const hasVideo = asset.type === 'video' && sessionMedia[mediaKey]?.thumb;
+
+    if (locEl) {
+      if (hasImage || hasVideo) {
+        locEl.textContent = ""; // 이미지가 있으면 텍스트 영역을 비웁니다
+      } else {
+        locEl.textContent = asset.location || (asset.type === 'video' ? '미디어 캔버스' : '비어 있음'); // 없으면 기존 텍스트 표시
+      }
+    }
+    
+    // 아래는 기존의 배경 이미지 설정 로직입니다
+    if(imgEl) {
+      if(asset.type === 'photo' && asset.compressedImg) {
+        imgEl.style.backgroundImage = `url(${asset.compressedImg})`;
+        imgEl.style.color = "#FFF"; imgEl.style.textShadow = "0 2px 6px rgba(0,0,0,0.9)";
+        if(tagEl) tagEl.style.color = "#FFF";
+      } 
+      else if(asset.type === 'video' && sessionMedia[mediaKey]?.thumb) {
+        imgEl.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.6)), url(${sessionMedia[mediaKey].thumb})`;
+        imgEl.style.backgroundColor = "transparent";
+        imgEl.style.color = "#FFF"; imgEl.style.textShadow = "0 2px 6px rgba(0,0,0,0.9)";
+        if(tagEl) tagEl.style.color = "#FFF";
+      }
+      else {
+        imgEl.style.backgroundImage = 'none';
+        imgEl.style.color = "var(--text-dark)"; imgEl.style.textShadow = "none";
+        if(tagEl) tagEl.style.color = "var(--accent)";
+        if(asset.type === 'video') imgEl.style.backgroundColor = "rgba(255,255,255,0.4)";
+      }
+    }
+  });
+}
+
+function openFocusMode(assetId) {
+  activeFrameId = assetId;
+  const asset = currentAssets.find(a => a.id === assetId);
+  if (!asset) return;
+
+  document.getElementById('panel-title').textContent = asset.location || asset.title;
+  document.getElementById('panel-asset-id').textContent = `NODE ID: ${asset.id.toUpperCase()}`;
+  document.getElementById('input-location').value = asset.location || ''; 
+  document.getElementById('input-date').value = asset.date || ''; 
+  document.getElementById('input-reflection').value = asset.reflection || '';
+  
+  const mainImageEl = document.getElementById('focus-main-image');
+  const mainVideoEl = document.getElementById('focus-main-video');
+  const emptyTextEl = document.getElementById('focus-empty-text');
+  const fileInputEl = document.getElementById('file-input');
+
+  if(asset.type === 'video') {
+    fileInputEl.setAttribute('accept', 'video/*');
+    document.getElementById('file-label-text').textContent = "시연용 미디어 업로드 (파일명 무관)";
+    document.getElementById('btn-upload-label').textContent = "🎬 영상 선택";
+    document.getElementById('panel-eyebrow-tag').textContent = "Media Centerpiece";
+    
+    const mediaKey = `${currentRoomId}_${asset.id}`;
+    
+    mainImageEl.style.display = 'none';
+    if(sessionMedia[mediaKey]?.url) {
+      emptyTextEl.style.display = 'none';
+      mainVideoEl.style.display = 'block';
+      mainVideoEl.src = sessionMedia[mediaKey].url;
+    } else {
+      mainVideoEl.style.display = 'none';
+      emptyTextEl.style.display = 'block';
+    }
+  } else {
+    fileInputEl.setAttribute('accept', 'image/*');
+    document.getElementById('file-label-text').textContent = "시연용 이미지 연동";
+    document.getElementById('btn-upload-label').textContent = "💾 사진 선택 (.jpg)";
+    document.getElementById('panel-eyebrow-tag').textContent = "Gallery Node";
+
+    mainVideoEl.style.display = 'none';
+    if(asset.compressedImg) {
+      emptyTextEl.style.display = 'none';
+      mainImageEl.style.display = 'block';
+      mainImageEl.style.backgroundImage = `url(${asset.compressedImg})`;
+    } else {
+      mainImageEl.style.display = 'none';
+      emptyTextEl.style.display = 'block';
+    }
+  }
+
+  document.getElementById('room-landing').classList.add('hidden-view');
+  document.getElementById('focus-view').classList.remove('hidden-view');
+}
+
+function closeFocusMode() {
+  const mainVideoEl = document.getElementById('focus-main-video');
+  mainVideoEl.pause(); 
+  activeFrameId = null;
+  updateHoneycombUI();
+  document.getElementById('focus-view').classList.add('hidden-view');
+  document.getElementById('room-landing').classList.remove('hidden-view');
+}
+
+function clearCurrentAsset() {
+  if (!activeFrameId) return;
+  const asset = currentAssets.find(a => a.id === activeFrameId);
+  const mediaKey = `${currentRoomId}_${activeFrameId}`;
+  
+  if (asset) {
+    asset.compressedImg = null;
+    if (asset.type === 'video' && sessionMedia[mediaKey]) {
+      URL.revokeObjectURL(sessionMedia[mediaKey].url);
+      delete sessionMedia[mediaKey];
+    }
+    saveAssets();
+
+    document.getElementById('focus-main-image').style.display = 'none';
+    const vidEl = document.getElementById('focus-main-video');
+    vidEl.pause(); vidEl.src = ''; vidEl.style.display = 'none';
+    document.getElementById('focus-empty-text').style.display = 'block';
+    
+    document.getElementById('file-input').value = '';
+    triggerSaveAlert();
+  }
+}
+
+['input-location', 'input-date', 'input-reflection'].forEach(id => {
+  document.getElementById(id).addEventListener('input', (e) => {
+    if(!activeFrameId) return;
+    const asset = currentAssets.find(a => a.id === activeFrameId);
+    if(asset) asset[id.replace('input-', '')] = e.target.value;
+  });
+  document.getElementById(id).addEventListener('blur', () => {
+    saveAssets();
+    triggerSaveAlert();
+    if(activeFrameId) document.getElementById('panel-title').textContent = currentAssets.find(a=>a.id===activeFrameId).location || "전시 프레임";
+  });
+});
+
+document.getElementById('file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file || !activeFrameId) return;
+  const asset = currentAssets.find(a => a.id === activeFrameId);
+  
+  if(asset.type === 'video') {
+    const url = URL.createObjectURL(file);
+    const mediaKey = `${currentRoomId}_${activeFrameId}`;
+    extractVideoThumb(url, (thumbData) => {
+      sessionMedia[mediaKey] = { url: url, thumb: thumbData };
+      document.getElementById('focus-empty-text').style.display = 'none';
+      const vidEl = document.getElementById('focus-main-video');
+      vidEl.style.display = 'block';
+      vidEl.src = url;
+      triggerSaveAlert();
+    });
+  } else {
+    compressImage(file, (base64) => {
+      asset.compressedImg = base64;
+      saveAssets();
+      document.getElementById('focus-empty-text').style.display = 'none';
+      const imgEl = document.getElementById('focus-main-image');
+      imgEl.style.display = 'block';
+      imgEl.style.backgroundImage = `url(${base64})`;
+      triggerSaveAlert();
+    });
+  }
+});
+
+function compressImage(file, callback) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      const MAX_SIZE = 1200;
+      if (w > h && w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } 
+      else if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; }
+      
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', 0.65)); 
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function extractVideoThumb(url, callback) {
+  const video = document.createElement('video');
+  video.muted = true; video.playsInline = true; video.src = url;
+  video.onloadeddata = () => { video.currentTime = 0.5; };
+  video.onseeked = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640; canvas.height = 360;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    callback(canvas.toDataURL('image/jpeg', 0.6));
+  };
+  video.onerror = () => { callback(null); }; 
+}
+
+function triggerSaveAlert() {
+  const ind = document.getElementById('save-indicator');
+  ind.classList.add('show');
+  setTimeout(() => ind.classList.remove('show'), 2000);
+}
+</script>
+</body>
+</html>
